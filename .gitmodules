@@ -1,3 +1,6 @@
-[submodule "ROS-TCP-Endpoint"]
-	path = ROS-TCP-Endpoint
+[submodule "quest2ros/quest2ros"]
+	path = quest2ros/quest2ros
+	url = https://github.com/pucciland95/quest2ros.git
+[submodule "quest2ros/ROS-TCP-Endpoint"]
+	path = quest2ros/ROS-TCP-Endpoint
 	url = https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git
