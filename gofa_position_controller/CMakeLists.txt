@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.0.2)
 project(gofa_position_controller)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
+
+set(Eigen3_DIR /usr/lib/cmake/eigen3/)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -12,6 +14,9 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   geometry_msgs
   tf2_ros
+  tf2_eigen
+  tf2_geometry_msgs
+  Eigen3
 )
 
 ## System dependencies are found with CMake's conventions
@@ -119,6 +124,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
