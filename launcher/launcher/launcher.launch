@@ -1,0 +1,25 @@
+<launch>
+
+    <arg name="ip"          default="192.168.125.120" doc="ip of the ROS machine (this machine)"/> 
+    <arg name="port"        default="10000" doc="port to connect ROS-TCP"/> <!-- Possibilities: 'true' or 'false'-->
+  
+    <!-- Launching ROS-TCP endpoint -->
+    <include file="$(find quest2ros)/launch/quest2ros.launch">
+        <arg name="ip"      value="$(arg ip)"/>
+        <arg name="port"    value="$(arg port)"/>
+        <arg name="launch_rviz" value="false"/>
+    </include>
+
+    <!-- Launching gofa in simulation -->
+    <include file="$(find omnicore_launcher)/launch/simulated_robot.launch">
+        <arg name="robot" value="gofa"/>
+        <arg name="gazebo_gui" value="false"/>
+    </include>
+
+    <!-- Run controller -->
+    <node name="position_controller" pkg="gofa_position_controller" type="position_controller" args="2> >(grep -v TF_REPEATED_DATA buffer_core)"/>
+
+    <!-- Run Rviz and load the default config -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find launcher)/config/config.rviz"/>
+
+</launch>

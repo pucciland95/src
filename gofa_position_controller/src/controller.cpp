@@ -1,17 +1,5 @@
 #include "../include/controller.hpp"
 
-Eigen::Matrix4d Controller::A(const std::vector<double> &q, const int &j)
-{
-    // Subscript j = Index j
-    // Subscript i = Index j + 1
-    Eigen::Matrix4d Aji;
-    Aji << cos(q[j]), -sin(q[j]) * cos(this->alpha[j]), sin(q[j]) * sin(this->alpha[j]), this->a[j] * cos(q[j]),
-        sin(q[j]), cos(q[j]) * cos(this->alpha[j]), -cos(q[j]) * sin(this->alpha[j]), this->a[j] * sin(q[j]),
-        0, sin(this->alpha[j]), cos(this->alpha[j]), this->d[j],
-        0, 0, 0, 1;
-    return Aji;
-}
-
 geometry_msgs::Transform Controller::GetTransform(std::string parent, std::string child)
 {
     geometry_msgs::Transform transform;
@@ -30,63 +18,88 @@ geometry_msgs::Transform Controller::GetTransform(std::string parent, std::strin
     return transform;
 }
 
-Matrix6d Controller::ComputeGeometricalJacobian(std::vector<double>& q)
+Matrix6d Controller::ComputeGeometricalJacobian()
 {
-    std::vector<Eigen::Matrix4d> A;
-    std::vector<Eigen::Matrix4d> T;
-    std::vector<Eigen::Vector3d> z;
-    std::vector<Eigen::Vector3d> p;
+    Matrix6d jacobian;
 
-    A.push_back( this->A(q, 0) ); // A01
-    T.push_back( A[0] );          // T01
-    z.push_back( {0, 0, 1} );     // z0
-    p.push_back( {0, 0, 0} );     // p0
+    geometry_msgs::Transform link1 = this->GetTransform("base", "L1");
+    geometry_msgs::Transform link2 = this->GetTransform("base", "L2");
+    geometry_msgs::Transform link3 = this->GetTransform("base", "L3");
+    geometry_msgs::Transform link4 = this->GetTransform("base", "L4");
+    geometry_msgs::Transform link5 = this->GetTransform("base", "L5");
+    geometry_msgs::Transform link6 = this->GetTransform("base", "L6");
+    geometry_msgs::Transform flange = this->GetTransform("base", "flange");
 
-    for(int k = 1; k < 6; k++)
-    {
-        A.push_back( this->A(q, k) );    // From A12 to A56
-        T.push_back( T[k-1]*A[k] );              // From T02 to T06
-        z.push_back( T[k-1].block<3, 1>(0, 2) ); // From z1 to z5
-        p.push_back( T[k-1].block<3, 1>(0, 3) ); // From p1 to p5
-    }
+    Eigen::Vector3d p = Eigen::Vector3d(flange.translation.x,
+                                        flange.translation.y,
+                                        flange.translation.z);
 
-    Eigen::Matrix4d A6TCP   = Eigen::Matrix4d::Identity();   // The orientation is the same
-    A6TCP.block<3, 1>(0, 3) = Eigen::Vector3d(0, 0, 0.1252); // The translation is along Z only
-    Eigen::Matrix4d T0TCP   = T[5]*A6TCP;
-    Eigen::Vector3d pTCP    = T0TCP.block<3, 1>(0, 3);
+    // Link1
+    Eigen::Vector3d p1 = Eigen::Vector3d(link1.translation.x, link1.translation.y, link1.translation.z);
+    Eigen::Quaterniond q1;
+    fromMsg(link1.rotation, q1);
+    Eigen::Vector3d z1 = q1.toRotationMatrix().block<3, 1>(0, 2);
+    jacobian.block<3,1>(0,0) = z1.cross(p - p1);
+    jacobian.block<3,1>(3,0) = z1;
 
-    // --- Actual computation of the Geometrical Jacobian according to Theoretical Notation --- //
-    Matrix36d Jp = Matrix36d::Zero(); // From Jp1 to Jp6
-    Matrix36d Jo = Matrix36d::Zero(); // From Jo1 to Jo6
-    Matrix6d J  = Matrix6d::Zero(); // From J1 to J6
+    // Link2
+    Eigen::Vector3d p2 = Eigen::Vector3d(link2.translation.x, link2.translation.y, link2.translation.z);
+    Eigen::Quaterniond q2;
+    fromMsg(link2.rotation, q2);
+    Eigen::Vector3d z2 = q2.toRotationMatrix().block<3, 1>(0, 1);
+    jacobian.block<3,1>(0,1) = z2.cross(p - p2);
+    jacobian.block<3,1>(3,1) = z2;
 
-    for(int k = 0; k < 6; k++)
-    {
-        Jp.block<3, 1>(0, k) = z[k].cross(pTCP - p[k]);
-        Jo.block<3, 1>(0, k) = z[k];
-    }
-    J.block<3, 6>(0, 0) = Jp;
-    J.block<3, 6>(3, 0) = Jo;
+    // Link3
+    Eigen::Vector3d p3 = Eigen::Vector3d(link3.translation.x, link3.translation.y, link3.translation.z);
+    Eigen::Quaterniond q3;
+    fromMsg(link3.rotation, q3);
+    Eigen::Vector3d z3 = q3.toRotationMatrix().block<3, 1>(0, 1);
+    jacobian.block<3,1>(0,2) = z3.cross(p - p3);
+    jacobian.block<3,1>(3,2) = z3;
 
-    return J;
-}
+    // Link4
+    Eigen::Vector3d p4 = Eigen::Vector3d(link4.translation.x, link4.translation.y, link4.translation.z);
+    Eigen::Quaterniond q4;
+    fromMsg(link4.rotation, q4);
+    Eigen::Vector3d z4 = q4.toRotationMatrix().block<3, 1>(0, 0);
+    jacobian.block<3,1>(0,3) = z4.cross(p - p4);
+    jacobian.block<3,1>(3,3) = z4;
 
-Matrix6d Controller::ComputeAnalyticalJacobian(Matrix6d Jg, Eigen::Vector3d flange_o)
-{
-    Eigen::Vector3d euler_xyz = flange_o;
-    double psi = euler_xyz.x();
-    double theta = euler_xyz.y();
-    double phi = euler_xyz.z();
-    Eigen::Matrix3d T;
-    T << 1, 0, sin(theta),
-        0, cos(psi), -sin(psi) * cos(theta),
-        0, sin(psi), cos(psi) * cos(theta);
-    Matrix6d T_A = Matrix6d::Identity();
-    T_A.block<3, 3>(3, 3) = T;
+    // Link5
+    Eigen::Vector3d p5 = Eigen::Vector3d(link5.translation.x, link5.translation.y, link5.translation.z);
+    Eigen::Quaterniond q5;
+    fromMsg(link5.rotation, q5);
+    Eigen::Vector3d z5 = q5.toRotationMatrix().block<3, 1>(0, 1);
+    jacobian.block<3,1>(0,4) = z5.cross(p - p5);
+    jacobian.block<3,1>(3,4) = z5;
 
-    Matrix6d Ja = T_A.inverse() * Jg;
+    // Link6
+    Eigen::Vector3d p6 = Eigen::Vector3d(link6.translation.x, link6.translation.y, link6.translation.z);
+    Eigen::Quaterniond q6;
+    fromMsg(link6.rotation, q6);
+    Eigen::Vector3d z6 = q6.toRotationMatrix().block<3, 1>(0, 0);
+    jacobian.block<3,1>(0,5) = z6.cross(p - p6);
+    jacobian.block<3,1>(3,5) = z6;
 
-    return Ja;
+    // std::vector<geometry_msgs::Transform> links = {link1, link2, link3, link4, link5, link6};
+
+    // for (int i = 0; i < 6; i++)
+    // {
+    //     geometry_msgs::Transform eachLink = links[i];
+    //     Eigen::Vector3d p_i = Eigen::Vector3d(eachLink.translation.x,
+    //                                           eachLink.translation.y,
+    //                                           eachLink.translation.z);
+    //     Eigen::Quaterniond q;
+    //     fromMsg(eachLink.rotation, q);
+
+    //     Eigen::Vector3d z_i = q.toRotationMatrix().block<3, 1>(0, 2);
+
+    //     jacobian.block<3, 1>(0, i) = z_i.cross(p - p_i);
+    //     jacobian.block<3, 1>(3, i) = z_i;
+    // }
+
+    return jacobian;
 }
 
 void Controller::ControlInputCallback()
@@ -98,7 +111,7 @@ void Controller::ControlInputCallback()
         flange_pose = this->GetTransform("base", "flange");
         desired_pose = this->GetTransform("base", "desired_pose");
     }
-    catch (std::exception &e)
+    catch (std::exception& e)
     {
         ROS_WARN("%s", e.what());
         return;
@@ -108,8 +121,26 @@ void Controller::ControlInputCallback()
     Eigen::Isometry3d flange_eigen = tf2::transformToEigen(flange_pose);
     Eigen::Isometry3d desired_pose_eigen = tf2::transformToEigen(desired_pose);
 
+
     Eigen::Vector3d position_error = desired_pose_eigen.translation() - flange_eigen.translation();
-    Eigen::Vector3d orientation_error = desired_pose_eigen.rotation().eulerAngles(0, 1, 2) - flange_eigen.rotation().eulerAngles(0, 1, 2);
+    // Eigen::Quaterniond q_e = Eigen::Quaterniond(flange_eigen.rotation());
+    // Eigen::Quaterniond q_d = Eigen::Quaterniond(desired_pose_eigen.rotation());
+    // double eta_e = q_e.w();
+    // Eigen::Vector3d epsilon_e = Eigen::Vector3d(q_e.x(), q_e.y(), q_e.z());
+    // double eta_d = q_d.w();
+    // Eigen::Vector3d epsilon_d = Eigen::Vector3d(q_d.x(), q_d.y(), q_d.z());
+    // Eigen::Matrix3d S;
+    // S <<              0, -epsilon_d.z(),  epsilon_d.y(),
+    //       epsilon_d.z(),              0, -epsilon_d.x(),
+    //      -epsilon_d.y(),  epsilon_d.x(),              0;
+
+
+    // Eigen::Vector3d orientation_error = eta_e * epsilon_d -
+    //                                     eta_d * epsilon_e - 
+    //                                     S * epsilon_e;
+
+
+    Eigen::Vector3d orientation_error = desired_pose_eigen.rotation().eulerAngles(2, 1, 2) - flange_eigen.rotation().eulerAngles(2, 1, 2);
 
     // Computing control action
     Eigen::Vector3d control_input_p = Kp.cwiseProduct(position_error);
@@ -118,23 +149,48 @@ void Controller::ControlInputCallback()
     control_input.block<3, 1>(0, 0) = control_input_p;
     control_input.block<3, 1>(3, 0) = control_input_o;
 
-    ROS_INFO("control input p:  [%lf, %lf, %lf]", control_input_p[0], control_input_p[1], control_input_p[2]);
-    ROS_INFO("control input po: [%lf, %lf, %lf]", control_input_o[0], control_input_o[1], control_input_o[2]);
+    // --------------- Publisher for debugging --------------- //
+    geometry_msgs::Pose msg_pose;
+    msg_pose.position.x = position_error.x();
+    msg_pose.position.y = position_error.y();
+    msg_pose.position.z = position_error.z();
+    msg_pose.orientation.x = orientation_error.x();
+    msg_pose.orientation.y = orientation_error.y();
+    msg_pose.orientation.z = orientation_error.z();
+    this->error_pub.publish(msg_pose);
+
+    geometry_msgs::TwistStamped msg_twist;
+    msg_twist.header.stamp = ros::Time::now();
+    msg_twist.header.frame_id = "base";
+    msg_twist.twist.linear.x = control_input[0] * 10.0;
+    msg_twist.twist.linear.y = control_input[1] * 10.0;
+    msg_twist.twist.linear.z = control_input[2] * 10.0;
+    msg_twist.twist.angular.x = control_input[3];
+    msg_twist.twist.angular.y = control_input[4];
+    msg_twist.twist.angular.z = control_input[5];
+
+    this->control_input_pub.publish(msg_twist);
+    // --------------- Publisher for debugging --------------- //
 
     // Computing Jacobian
-    sensor_msgs::JointState joints;
-    sensor_msgs::JointStateConstPtr msg = ros::topic::waitForMessage<sensor_msgs::JointState>("joint_states", ros::Duration(10));
-        if (msg == NULL)
-            ROS_INFO("No joint messages received");
-        else
-            joints = * msg;
+    Matrix6d Jg = this->ComputeGeometricalJacobian();
 
-    ROS_INFO("Here");
-    Matrix6d Jg = this->ComputeGeometricalJacobian(joints.position);
-    Matrix6d Ja = this->ComputeAnalyticalJacobian(Jg, flange_eigen.rotation().eulerAngles(0, 1, 2));
+    Eigen::Vector3d euler_zyz = flange_eigen.rotation().eulerAngles(2, 1, 2);
+    double phi = euler_zyz.x();
+    double theta = euler_zyz.y();
+    double psi = euler_zyz.z();
+    Eigen::Matrix3d T;
+    T << 0, -sin(phi),  cos(phi)*sin(theta),
+         0,  cos(phi),  sin(phi)*sin(theta),
+         1,         0,           cos(theta);
+    Matrix6d T_A = Matrix6d::Identity();
+    T_A.block<3, 3>(3, 3) = T;
+    control_input = T_A * control_input;
+
+    // Matrix6d Ja = this->ComputeAnalyticalJacobian(JgFrat, flange_eigen.rotation().eulerAngles(2, 1, 2));
 
     // Changing datatype
-    Vector6d joint_velocities = Ja.inverse() * control_input;
+    Vector6d joint_velocities = Jg.inverse() * control_input;
     std_msgs::Float64MultiArray q_dot;
     q_dot.data.reserve(6);
 
@@ -145,11 +201,9 @@ void Controller::ControlInputCallback()
     q_dot.data.push_back(joint_velocities[4]);
     q_dot.data.push_back(joint_velocities[5]);
 
-    // ROS_INFO("joint_velocities: [%lf, %lf, %lf, %lf, %lf, %lf]", joint_velocities[0], joint_velocities[1], joint_velocities[2], joint_velocities[3], joint_velocities[4], joint_velocities[5]);
-    // ROS_INFO("q_dot: [%lf, %lf, %lf, %lf, %lf, %lf]", q_dot.data[0], q_dot.data[1], q_dot.data[2], q_dot.data[3], q_dot.data[4], q_dot.data[5]);
 
     // Uncomment to die
-    control_input_pub.publish(q_dot);
+    joint_velocity_pub.publish(q_dot);
 }
 
 Controller::Controller(ros::NodeHandle &nh)
@@ -157,7 +211,9 @@ Controller::Controller(ros::NodeHandle &nh)
     this->nh = nh;
 
     // Publisher
-    control_input_pub = nh.advertise<std_msgs::Float64MultiArray>("/VelocityControllers_JointGroupVelocityController/command", 100);
+    this->joint_velocity_pub = nh.advertise<std_msgs::Float64MultiArray>("/VelocityControllers_JointGroupVelocityController/command", 100);
+    this->error_pub = nh.advertise<geometry_msgs::Pose>("error", 100);
+    this->control_input_pub = nh.advertise<geometry_msgs::TwistStamped>("control_input", 100);
 
     // Creating the TF listener
     this->pTfListener = new tf2_ros::TransformListener(this->tfBuffer);
@@ -165,6 +221,7 @@ Controller::Controller(ros::NodeHandle &nh)
     this->control_input_timer = this->nh.createTimer(ros::Duration(0.01), std::bind(&Controller::ControlInputCallback, this));
 
     // Getting the controller gains from param file
-    this->Kp = Eigen::Vector3d(0.1, 0.1, 0.1); // TODO: Parametrise
-    this->Ko = Eigen::Vector3d(0.1, 0.1, 0.1); // TODO: Parametrise
+    this->Kp = Eigen::Vector3d(1.0, 1.0, 1.0); // TODO: Parametrise
+    this->Ko = Eigen::Vector3d(1.0, 1.0, 1.0); // TODO: Parametrise
+
 }

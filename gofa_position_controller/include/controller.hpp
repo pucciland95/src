@@ -11,11 +11,12 @@
 #include "tf2_eigen/tf2_eigen.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "geometry_msgs/TransformStamped.h"
+#include "geometry_msgs/TwistStamped.h"
 #include "sensor_msgs/JointState.h"
 
 typedef Eigen::Matrix<double, 6, 6> Matrix6d;
-typedef Eigen::Matrix<double, 3, 6> Matrix36d;
 typedef Eigen::Matrix<double, 6, 1> Vector6d;
+typedef Eigen::Matrix<double, 3, 6> Matrix36d;
 
 class Controller
 {
@@ -26,9 +27,7 @@ private:
     void ControlInputCallback();
 
     geometry_msgs::Transform GetTransform(std::string parent, std::string child);
-    Matrix6d ComputeGeometricalJacobian(std::vector<double>& q);
-    Matrix6d ComputeAnalyticalJacobian(Matrix6d Jg, Eigen::Vector3d flange_o);
-    Eigen::Matrix4d A(const std::vector<double> &q, const int &j);
+    Matrix6d ComputeGeometricalJacobian();
 
     // ------------------------------------- //
     // ---------------- ROS ---------------- //
@@ -36,6 +35,8 @@ private:
     ros::NodeHandle nh;
 
     // Publishers
+    ros::Publisher joint_velocity_pub;
+    ros::Publisher error_pub;
     ros::Publisher control_input_pub;
 
     // Subscribers
@@ -50,11 +51,6 @@ private:
     // Controller gains
     Eigen::Vector3d Kp;
     Eigen::Vector3d Ko;
-
-    // DH
-    const std::vector<double>   a   = {0.0, 0.444, 0.110, 0.0, 0.080, 0.0};
-    const std::vector<double>   d   = {0.265, 0.0, 0.0, 0.470, 0.0, 0.101};
-    const std::vector<double> alpha = {-M_PI/2.0, 0.0, -M_PI/2.0, M_PI/2.0, -M_PI/2.0, 0.0};
 };
 
 #endif
