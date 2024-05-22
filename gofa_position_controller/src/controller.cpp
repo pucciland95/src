@@ -107,20 +107,11 @@ Eigen::Vector3d Controller::ComputeOrientationError(Eigen::Matrix3d &R_flange, E
     Eigen::Quaterniond q_e = Eigen::Quaterniond(R_flange);
     Eigen::Quaterniond q_d = Eigen::Quaterniond(R_desiredPose);
 
-    double eta_e = q_e.w();
-    Eigen::Vector3d epsilon_e = Eigen::Vector3d(q_e.x(), q_e.y(), q_e.z());
+    Eigen::Quaterniond delta_q = q_d * q_e.inverse();
 
-    double eta_d = q_d.w();
-    Eigen::Vector3d epsilon_d = Eigen::Vector3d(q_d.x(), q_d.y(), q_d.z());
-
-    Eigen::Matrix3d S;
-    S << 0, -epsilon_d.z(), epsilon_d.y(),
-        epsilon_d.z(), 0, -epsilon_d.x(),
-        -epsilon_d.y(), epsilon_d.x(), 0;
-
-    // This magic formula comes from Robotica: Modellistica, pianificazione e controllo \
-       from Siciliano, Sciavicco, Villani and Oriolo. Page 141
-    Eigen::Vector3d orientation_error = eta_e * epsilon_d - eta_d * epsilon_e - S * epsilon_e;
+    // Which one is better?
+    // Eigen::Vector3d orientation_error = Eigen::Vector3d(delta_q.x(), delta_q.y(), delta_q.z()) * delta_q.w();
+    Eigen::Vector3d orientation_error = Eigen::Vector3d(delta_q.x(), delta_q.y(), delta_q.z());
 
     return orientation_error;
 }
@@ -131,8 +122,8 @@ void Controller::ControlInputCallback()
     geometry_msgs::Transform desired_pose;
     try
     {
-        flange_pose = this->GetTransform("base", "flange");
-        desired_pose = this->GetTransform("base", "desired_pose");
+        flange_pose = this->GetTransform(this->tf_base_name, this->tf_tcp_name);
+        desired_pose = this->GetTransform(this->tf_base_name, this->tf_desired_name);
     }
     catch (std::exception &e)
     {
@@ -179,8 +170,11 @@ Controller::Controller(ros::NodeHandle &nh)
 {
     this->nh = nh;
 
+    // Getting parameters
+
+    std::string topic_input_commands_name = "/VelocityControllers_JointGroupVelocityController/command"; // TODO: parametrise
     // Publisher
-    this->joint_velocity_pub = nh.advertise<std_msgs::Float64MultiArray>("/VelocityControllers_JointGroupVelocityController/command", 100);
+    this->joint_velocity_pub = nh.advertise<std_msgs::Float64MultiArray>(topic_input_commands_name, 100);
 
     // Creating the TF listener
     this->pTfListener = new tf2_ros::TransformListener(this->tfBuffer);
@@ -188,6 +182,11 @@ Controller::Controller(ros::NodeHandle &nh)
     this->control_input_timer = this->nh.createTimer(ros::Duration(0.01), std::bind(&Controller::ControlInputCallback, this));
 
     // Getting the controller gains from param file
-    this->Kp = Eigen::Vector3d(1.0, 1.0, 1.0); // TODO: Parametrise
-    this->Ko = Eigen::Vector3d(2.0, 2.0, 2.0); // TODO: Parametrise
+    this->Kp = Eigen::Vector3d(10.0, 10.0, 10.0); // TODO: Parametrise
+    this->Ko = Eigen::Vector3d(5.0, 5.0, 5.0); // TODO: Parametrise
+
+    this->tf_base_name = "base"; // TODO: Parametrise
+    this->tf_tcp_name = "flange"; // TODO: Parametrise
+    this->tf_desired_name = "desired_pose"; // TODO: Parametrise
 }
+ 

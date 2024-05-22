@@ -17,7 +17,7 @@
     </include>
 
     <!-- Run controller -->
-    <node name="position_controller" pkg="gofa_position_controller" type="position_controller" args="2> >(grep -v TF_REPEATED_DATA buffer_core)"/>
+    <node name="position_controller" pkg="gofa_position_controller" type="position_controller" args="2> >(grep -v TF_REPEATED_DATA buffer_core)" output="screen"/>
 
     <!-- Run Rviz and load the default config -->
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find launcher)/config/config.rviz"/>

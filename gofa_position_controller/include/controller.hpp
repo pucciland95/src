@@ -16,7 +16,6 @@
 
 typedef Eigen::Matrix<double, 6, 6> Matrix6d;
 typedef Eigen::Matrix<double, 6, 1> Vector6d;
-typedef Eigen::Matrix<double, 3, 6> Matrix36d;
 
 class Controller
 {
@@ -46,6 +45,16 @@ private:
     // Tf listener
     tf2_ros::Buffer tfBuffer;
     tf2_ros::TransformListener *pTfListener;
+
+    // ------------------------------------- //
+    // --------- Class parameters ---------- //
+    // ------------------------------------- //
+    // TF names: with respect to which TF to move,\
+                 the TF to move (robot's tcp) and \
+                 the TF to reach (desired pose)
+    std::string tf_base_name;
+    std::string tf_tcp_name;
+    std::string tf_desired_name;
 
     // Controller gains
     Eigen::Vector3d Kp;
