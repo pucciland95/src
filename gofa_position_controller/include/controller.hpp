@@ -28,6 +28,7 @@ private:
 
     geometry_msgs::Transform GetTransform(std::string parent, std::string child);
     Matrix6d ComputeGeometricalJacobian();
+    Eigen::Vector3d ComputeOrientationError(Eigen::Matrix3d& R_flange, Eigen::Matrix3d& R_desiredPose);
 
     // ------------------------------------- //
     // ---------------- ROS ---------------- //
@@ -36,8 +37,6 @@ private:
 
     // Publishers
     ros::Publisher joint_velocity_pub;
-    ros::Publisher error_pub;
-    ros::Publisher control_input_pub;
 
     // Subscribers
 
