@@ -123,24 +123,24 @@ void Controller::ControlInputCallback()
 
 
     Eigen::Vector3d position_error = desired_pose_eigen.translation() - flange_eigen.translation();
-    // Eigen::Quaterniond q_e = Eigen::Quaterniond(flange_eigen.rotation());
-    // Eigen::Quaterniond q_d = Eigen::Quaterniond(desired_pose_eigen.rotation());
-    // double eta_e = q_e.w();
-    // Eigen::Vector3d epsilon_e = Eigen::Vector3d(q_e.x(), q_e.y(), q_e.z());
-    // double eta_d = q_d.w();
-    // Eigen::Vector3d epsilon_d = Eigen::Vector3d(q_d.x(), q_d.y(), q_d.z());
-    // Eigen::Matrix3d S;
-    // S <<              0, -epsilon_d.z(),  epsilon_d.y(),
-    //       epsilon_d.z(),              0, -epsilon_d.x(),
-    //      -epsilon_d.y(),  epsilon_d.x(),              0;
+    Eigen::Quaterniond q_e = Eigen::Quaterniond(flange_eigen.rotation());
+    Eigen::Quaterniond q_d = Eigen::Quaterniond(desired_pose_eigen.rotation());
+    double eta_e = q_e.w();
+    Eigen::Vector3d epsilon_e = Eigen::Vector3d(q_e.x(), q_e.y(), q_e.z());
+    double eta_d = q_d.w();
+    Eigen::Vector3d epsilon_d = Eigen::Vector3d(q_d.x(), q_d.y(), q_d.z());
+    Eigen::Matrix3d S;
+    S <<              0, -epsilon_d.z(),  epsilon_d.y(),
+          epsilon_d.z(),              0, -epsilon_d.x(),
+         -epsilon_d.y(),  epsilon_d.x(),              0;
 
 
-    // Eigen::Vector3d orientation_error = eta_e * epsilon_d -
-    //                                     eta_d * epsilon_e - 
-    //                                     S * epsilon_e;
+    Eigen::Vector3d orientation_error = eta_e * epsilon_d -
+                                        eta_d * epsilon_e - 
+                                        S * epsilon_e;
 
 
-    Eigen::Vector3d orientation_error = desired_pose_eigen.rotation().eulerAngles(2, 1, 2) - flange_eigen.rotation().eulerAngles(2, 1, 2);
+    // Eigen::Vector3d orientation_error = desired_pose_eigen.rotation().eulerAngles(2, 1, 2) - flange_eigen.rotation().eulerAngles(2, 1, 2);
 
     // Computing control action
     Eigen::Vector3d control_input_p = Kp.cwiseProduct(position_error);
@@ -165,32 +165,18 @@ void Controller::ControlInputCallback()
     msg_twist.twist.linear.x = control_input[0] * 10.0;
     msg_twist.twist.linear.y = control_input[1] * 10.0;
     msg_twist.twist.linear.z = control_input[2] * 10.0;
-    msg_twist.twist.angular.x = control_input[3];
-    msg_twist.twist.angular.y = control_input[4];
-    msg_twist.twist.angular.z = control_input[5];
+    msg_twist.twist.angular.x = control_input[3] * 10.0;
+    msg_twist.twist.angular.y = control_input[4] * 10.0;
+    msg_twist.twist.angular.z = control_input[5] * 10.0;
 
     this->control_input_pub.publish(msg_twist);
     // --------------- Publisher for debugging --------------- //
 
     // Computing Jacobian
     Matrix6d Jg = this->ComputeGeometricalJacobian();
-
-    Eigen::Vector3d euler_zyz = flange_eigen.rotation().eulerAngles(2, 1, 2);
-    double phi = euler_zyz.x();
-    double theta = euler_zyz.y();
-    double psi = euler_zyz.z();
-    Eigen::Matrix3d T;
-    T << 0, -sin(phi),  cos(phi)*sin(theta),
-         0,  cos(phi),  sin(phi)*sin(theta),
-         1,         0,           cos(theta);
-    Matrix6d T_A = Matrix6d::Identity();
-    T_A.block<3, 3>(3, 3) = T;
-    control_input = T_A * control_input;
-
-    // Matrix6d Ja = this->ComputeAnalyticalJacobian(JgFrat, flange_eigen.rotation().eulerAngles(2, 1, 2));
+    Vector6d joint_velocities = Jg.inverse() * control_input;
 
     // Changing datatype
-    Vector6d joint_velocities = Jg.inverse() * control_input;
     std_msgs::Float64MultiArray q_dot;
     q_dot.data.reserve(6);
 
@@ -200,7 +186,6 @@ void Controller::ControlInputCallback()
     q_dot.data.push_back(joint_velocities[3]);
     q_dot.data.push_back(joint_velocities[4]);
     q_dot.data.push_back(joint_velocities[5]);
-
 
     // Uncomment to die
     joint_velocity_pub.publish(q_dot);
@@ -222,6 +207,6 @@ Controller::Controller(ros::NodeHandle &nh)
 
     // Getting the controller gains from param file
     this->Kp = Eigen::Vector3d(1.0, 1.0, 1.0); // TODO: Parametrise
-    this->Ko = Eigen::Vector3d(1.0, 1.0, 1.0); // TODO: Parametrise
+    this->Ko = Eigen::Vector3d(2.0, 2.0, 2.0); // TODO: Parametrise
 
 }
