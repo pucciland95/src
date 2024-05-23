@@ -27,7 +27,7 @@ private:
 
     geometry_msgs::Transform GetTransform(std::string parent, std::string child);
     Matrix6d ComputeGeometricalJacobian();
-    Eigen::Vector3d ComputeOrientationError(Eigen::Matrix3d& R_flange, Eigen::Matrix3d& R_desiredPose);
+    Eigen::Vector3d ComputeOrientationError(geometry_msgs::Transform &flange_pose, geometry_msgs::Transform &desired_pose);
 
     // ------------------------------------- //
     // ---------------- ROS ---------------- //

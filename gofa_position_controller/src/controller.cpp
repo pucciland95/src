@@ -102,12 +102,49 @@ Matrix6d Controller::ComputeGeometricalJacobian()
     return jacobian;
 }
 
-Eigen::Vector3d Controller::ComputeOrientationError(Eigen::Matrix3d &R_flange, Eigen::Matrix3d &R_desiredPose)
+Eigen::Vector3d Controller::ComputeOrientationError(geometry_msgs::Transform &flange_pose, geometry_msgs::Transform &desired_pose)
 {
-    Eigen::Quaterniond q_e = Eigen::Quaterniond(R_flange);
-    Eigen::Quaterniond q_d = Eigen::Quaterniond(R_desiredPose);
 
-    Eigen::Quaterniond delta_q = q_d * q_e.inverse();
+    Eigen::Isometry3d flange_eigen = tf2::transformToEigen(flange_pose);
+    Eigen::Isometry3d desired_pose_eigen = tf2::transformToEigen(desired_pose);
+
+    Eigen::Matrix3d delta_R = desired_pose_eigen.rotation() * flange_eigen.rotation().transpose();
+    Eigen::Quaterniond delta_q = Eigen::Quaterniond(delta_R);
+    Eigen::Quaterniond delta_q_negated = Eigen::Quaterniond(-delta_q.w(), -delta_q.x(), -delta_q.y(), -delta_q.z()); 
+
+    double angle_delta_q = 2 * acos(delta_q.w());
+    double angle_delta_q_negated = 2 * acos(delta_q_negated.w());
+
+    if(abs(angle_delta_q) <= abs(angle_delta_q_negated))
+        delta_q = delta_q;
+    else
+        delta_q = delta_q_negated;
+
+    // Eigen::Quaterniond q_e = Eigen::Quaterniond(q_flange.w, q_flange.x, q_flange.y, q_flange.z);
+    // Eigen::Quaterniond q_d = Eigen::Quaterniond(q_desired_pose.w, q_desired_pose.x, q_desired_pose.y, q_desired_pose.z);
+
+    // Choosing first the quaternion with minimal axis angle
+    // Eigen::Quaterniond q_e_negated = Eigen::Quaterniond(-q_flange.w, -q_flange.x, -q_flange.y, -q_flange.z);
+    // Eigen::Quaterniond q_d_negated = Eigen::Quaterniond(-q_desired_pose.w, -q_desired_pose.x, -q_desired_pose.y, -q_desired_pose.z);
+
+    // double angle_q_e = 2 * acos(q_e.w());
+    // double angle_q_e_negated = 2 * acos(q_e_negated.w());
+    // if(abs(angle_q_e) <= abs(angle_q_e_negated))
+    //     q_e = q_e;
+    // else
+    //     q_e = q_e_negated;
+
+    // double angle_q_d = 2 * acos(q_d.w());
+    // double angle_q_d_negated = 2 * acos(q_d_negated.w());
+    // if(abs(angle_q_d) <= abs(angle_q_d_negated))
+    //     q_d = q_d;
+    // else
+    //     q_d = q_d_negated;
+    // std::stringstream ss;
+    // ss << "Choosing " << (angle_q_e < angle_q_e_negated?"+":"-") << (angle_q_d < angle_q_d_negated?"+":"-");
+    // ROS_INFO(ss.str().c_str());
+
+    // Eigen::Quaterniond delta_q = q_d * q_e.inverse();
 
     // Which one is better?
     // Eigen::Vector3d orientation_error = Eigen::Vector3d(delta_q.x(), delta_q.y(), delta_q.z()) * delta_q.w();
@@ -136,9 +173,7 @@ void Controller::ControlInputCallback()
     Eigen::Isometry3d desired_pose_eigen = tf2::transformToEigen(desired_pose);
 
     Eigen::Vector3d position_error = desired_pose_eigen.translation() - flange_eigen.translation();
-    Eigen::Matrix3d R_flange = flange_eigen.rotation();
-    Eigen::Matrix3d R_desiredPose = desired_pose_eigen.rotation();
-    Eigen::Vector3d orientation_error = ComputeOrientationError(R_flange, R_desiredPose);
+    Eigen::Vector3d orientation_error = ComputeOrientationError(flange_pose, desired_pose);
 
     // Computing control action
     Eigen::Vector3d control_input_p = Kp.cwiseProduct(position_error);
